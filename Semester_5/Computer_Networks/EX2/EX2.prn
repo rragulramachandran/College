@@ -1,0 +1,907 @@
+
+abishekvh@Abisheks-MacBook-Air EX2 % cat Main.c
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <stdbool.h>
+
+#include "Sender.h"
+#include "Reciever.h"
+
+#define TABLE_SIZE 20
+#define MAX_MESSAGE_LEN 1000
+#define MAX_BITS 8000
+#define MAX_PACKETS 600
+#define PACKET_BITS 16
+
+#define SLOT_EMPTY 0
+#define SLOT_OCCUPIED 1
+#define SLOT_DELETED -1
+
+// ---------- HASH TABLE ----------
+
+typedef struct {
+    char url[100];
+    char ip[16];
+    char mac[18];
+    int occupied;
+} HashEntry;
+
+typedef struct { int src, dest; } Ports;
+
+HashEntry table[TABLE_SIZE];
+
+unsigned int hashFunc(char url[]) {
+    unsigned int sum = 0;
+    for (int i = 0; url[i] != '\0'; i++) sum += (unsigned char)url[i];
+    return sum % TABLE_SIZE;
+}
+
+void initTable(void) {
+    for (int i = 0; i < TABLE_SIZE; i++) table[i].occupied = SLOT_EMPTY;
+}
+
+int insert(char url[], char ip[], char mac[]) {
+    unsigned int idx = hashFunc(url);
+    for (int probe = 0; probe < TABLE_SIZE; probe++) {
+        unsigned int i = (idx + probe) % TABLE_SIZE;
+        if (table[i].occupied != SLOT_OCCUPIED || strcmp(table[i].url, url) == 0) {
+            strcpy(table[i].url, url);
+            strcpy(table[i].ip, ip);
+            strcpy(table[i].mac, mac);
+            table[i].occupied = SLOT_OCCUPIED;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int lookup(char url[]) {
+    unsigned int idx = hashFunc(url);
+    for (int probe = 0; probe < TABLE_SIZE; probe++) {
+        unsigned int i = (idx + probe) % TABLE_SIZE;
+        if (table[i].occupied == SLOT_OCCUPIED && strcmp(table[i].url, url) == 0) return i;
+        if (table[i].occupied == SLOT_EMPTY) break;
+    }
+    return -1;
+}
+
+int updateEntry(char url[], char newIp[], char newMac[]) {
+    unsigned int idx = hashFunc(url);
+    for (int probe = 0; probe < TABLE_SIZE; probe++) {
+        unsigned int i = (idx + probe) % TABLE_SIZE;
+        if (table[i].occupied == SLOT_OCCUPIED && strcmp(table[i].url, url) == 0) {
+            strcpy(table[i].ip, newIp);
+            strcpy(table[i].mac, newMac);
+            return 0;
+        }
+        if (table[i].occupied == SLOT_EMPTY) break;
+    }
+    return -1;
+}
+
+int deleteEntry(char url[]) {
+    unsigned int idx = hashFunc(url);
+    for (int probe = 0; probe < TABLE_SIZE; probe++) {
+        unsigned int i = (idx + probe) % TABLE_SIZE;
+        if (table[i].occupied == SLOT_OCCUPIED && strcmp(table[i].url, url) == 0) {
+            table[i].occupied = SLOT_DELETED;
+            return 0;
+        }
+        if (table[i].occupied == SLOT_EMPTY) break;
+    }
+    return -1;
+}
+
+void preloadDomains(void) {
+    insert("www.mepcoeng.ac.in", "192.168.100.1", "00:1A:2B:3C:4D:5E");
+    insert("www.google.com", "142.250.10.1", "AA:11:22:33:44:55");
+    insert("www.youtube.com", "142.250.10.2", "AA:11:22:33:44:66");
+    insert("www.facebook.com", "157.240.1.1", "BB:22:33:44:55:66");
+    insert("www.amazon.com", "205.251.1.1", "CC:33:44:55:66:77");
+    insert("www.wikipedia.org", "198.35.26.1", "DD:44:55:66:77:88");
+    insert("mail.google.com", "142.250.10.3", "10:9F:8E:7D:6C:5B");
+    insert("web.whatsapp.com", "157.240.12.1", "2C:54:91:A7:B8:C9");
+    insert("discord.com", "162.159.136.232", "48:6F:73:12:34:56");
+    insert("teams.microsoft.com", "52.112.0.1", "9A:BC:DE:F1:23:45");
+}
+
+// ---------- LAYER HELPERS ----------
+
+int readMessage(char filename[], char buffer[]) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) return -1;
+    int len = 0, ch;
+    while ((ch = fgetc(fp)) != EOF && len < MAX_MESSAGE_LEN) {
+        if (ch == '\n' || ch == '\r') continue;
+        buffer[len++] = (char)ch;
+    }
+    buffer[len] = '\0';
+    fclose(fp);
+    return 0;
+}
+
+void toBinary(unsigned long val, int bits, char out[]) {
+    out[bits] = '\0';
+    for (int i = bits - 1; i >= 0; i--) {
+        out[i] = (val & 1) ? '1' : '0';
+        val >>= 1;
+    }
+}
+
+void ipToBinary32(char ip[], char out[]) {
+    int a, b, c, d;
+    sscanf(ip, "%d.%d.%d.%d", &a, &b, &c, &d);
+    char octet[9];
+    out[0] = '\0';
+    toBinary(a, 8, octet); strcat(out, octet);
+    toBinary(b, 8, octet); strcat(out, octet);
+    toBinary(c, 8, octet); strcat(out, octet);
+    toBinary(d, 8, octet); strcat(out, octet);
+}
+
+void macToBinary48(char mac[], char out[]) {
+    unsigned int b[6];
+    sscanf(mac, "%x:%x:%x:%x:%x:%x", &b[0], &b[1], &b[2], &b[3], &b[4], &b[5]);
+    char byteBits[9];
+    out[0] = '\0';
+    for (int i = 0; i < 6; i++) {
+        toBinary(b[i], 8, byteBits);
+        strcat(out, byteBits);
+    }
+}
+
+// Application Layer: message -> bitstream
+int applicationLayer(char message[], char bitstreamOut[]) {
+    bitstreamOut[0] = '\0';
+    char charBits[9];
+    for (int i = 0; message[i]; i++) {
+        toBinary((unsigned char)message[i], 8, charBits);
+        strcat(bitstreamOut, charBits);
+    }
+    return (int)strlen(message) * 8;
+}
+
+// Transport Layer: random ports
+Ports transportLayer(void) {
+    Ports p;
+    p.src = 1024 + rand() % (65535 - 1024);
+    p.dest = 1024 + rand() % (65535 - 1024);
+    return p;
+}
+
+// Network Layer: split bitstream into 16-bit packets
+int networkLayer(char bitstream[], int totalBits, char packets[][PACKET_BITS + 1]) {
+    int packetCount = 0;
+    for (int pos = 0; pos < totalBits; pos += PACKET_BITS) {
+        char chunk[PACKET_BITS + 1];
+        int i;
+        for (i = 0; i < PACKET_BITS && (pos + i) < totalBits; i++)
+            chunk[i] = bitstream[pos + i];
+        for (; i < PACKET_BITS; i++) chunk[i] = '0';
+        chunk[PACKET_BITS] = '\0';
+        strcpy(packets[packetCount], chunk);
+        packetCount++;
+    }
+    return packetCount;
+}
+
+// Build network layer header (ports + IPs)
+void buildNetworkHeader(char header[], char srcPortBits[], char destPortBits[],
+                        char srcIPBin[], char destIPBin[]) {
+    header[0] = '\0';
+    strcat(header, srcPortBits);
+    strcat(header, destPortBits);
+    strcat(header, srcIPBin);
+    strcat(header, destIPBin);
+}
+
+// ---------- MENU ----------
+
+void printMenu() {
+    printf("\n======= MENU =======\n");
+    printf("1. Display Hash Table\n");
+    printf("2. Add URL Entry\n");
+    printf("3. Update Entry\n");
+    printf("4. Delete Entry\n");
+    printf("5. Run Network Layers (Byte-Count + CRC)\n");
+    printf("6. Exit\n");
+    printf("Select (1-6): ");
+}
+
+// ---------- MAIN ----------
+
+int main(void) {
+    srand((unsigned int)time(NULL));
+
+    initTable();
+    preloadDomains();
+
+    int choice = 0;
+    while (choice != 6) {
+        printMenu();
+        if (scanf("%d", &choice) != 1) {
+            printf("Invalid input. Exiting.\n");
+            break;
+        }
+
+        switch (choice) {
+            case 1: {
+                printf("\n======= HASH TABLE =======\n");
+                printf("%-5s | %-25s | %-15s | %-20s\n", "Idx", "URL", "IP", "MAC");
+                printf("--------------------------------------------------------------\n");
+                for (int i = 0; i < TABLE_SIZE; i++) {
+                    if (table[i].occupied == SLOT_OCCUPIED) {
+                        printf("%-5d | %-25s | %-15s | %-20s\n",
+                               i, table[i].url, table[i].ip, table[i].mac);
+                    }
+                }
+                printf("--------------------------------------------------------------\n");
+                break;
+            }
+            case 2: {
+                char u[100], ip[16], m[18];
+                printf("Enter URL: "); scanf("%99s", u);
+                printf("Enter IP: "); scanf("%15s", ip);
+                printf("Enter MAC (AA:BB:CC:DD:EE:FF): "); scanf("%17s", m);
+                if (insert(u, ip, m) == 0) printf("Added.\n");
+                else printf("Table full!\n");
+                break;
+            }
+            case 3: {
+                char u[100], ip[16], m[18];
+                printf("URL to update: "); scanf("%99s", u);
+                printf("New IP: "); scanf("%15s", ip);
+                printf("New MAC: "); scanf("%17s", m);
+                if (updateEntry(u, ip, m) == 0) printf("Updated.\n");
+                else printf("Not found.\n");
+                break;
+            }
+            case 4: {
+                char u[100];
+                printf("URL to delete: "); scanf("%99s", u);
+                if (deleteEntry(u) == 0) printf("Deleted.\n");
+                else printf("Not found.\n");
+                break;
+            }
+            case 5: {
+                // ----- NETWORK LAYER PROCESSING -----
+                char message[MAX_MESSAGE_LEN + 1];
+                if (readMessage("message1.txt", message) != 0) {
+                    printf("Error: Cannot open message1.txt\n");
+                    break;
+                }
+
+                char srcURL[100], destURL[100];
+                printf("\nEnter Source URL: "); scanf("%99s", srcURL);
+                printf("Enter Destination URL: "); scanf("%99s", destURL);
+
+                int srcIdx = lookup(srcURL);
+                int destIdx = lookup(destURL);
+                if (srcIdx == -1 || destIdx == -1) {
+                    printf("Error: URL not found in table.\n");
+                    break;
+                }
+
+                // Layer 1: Application
+                char bitstream[MAX_BITS + 1];
+                int totalBits = applicationLayer(message, bitstream);
+
+                printf("\n======== LAYER 1: APPLICATION ========\n");
+                printf("Message: %s\n", message);
+                printf("Bitstream (%d bits):\n%s\n", totalBits, bitstream);
+
+                // Layer 2: Transport
+                Ports ports = transportLayer();
+                char srcPortBits[17], destPortBits[17];
+                toBinary(ports.src, 16, srcPortBits);
+                toBinary(ports.dest, 16, destPortBits);
+
+                printf("\n======== LAYER 2: TRANSPORT ========\n");
+                printf("Src Port:  %d (%s)\n", ports.src, srcPortBits);
+                printf("Dest Port: %d (%s)\n", ports.dest, destPortBits);
+
+                // Layer 3: Network
+                static char packets[MAX_PACKETS][PACKET_BITS + 1];
+                int packetCount = networkLayer(bitstream, totalBits, packets);
+
+                char srcIPBin[33], destIPBin[33];
+                ipToBinary32(table[srcIdx].ip, srcIPBin);
+                ipToBinary32(table[destIdx].ip, destIPBin);
+
+                printf("\n======== LAYER 3: NETWORK ========\n");
+                printf("Src IP:  %s (%s)\n", srcIPBin, table[srcIdx].ip);
+                printf("Dest IP: %s (%s)\n", destIPBin, table[destIdx].ip);
+                printf("Packets: %d\n", packetCount);
+                for (int i = 0; i < packetCount; i++) {
+                    printf("  Packet %d: %s\n", i + 1, packets[i]);
+                }
+
+                // Layer 4: Data Link (Byte-Count Framing + CRC)
+                char srcMACBin[49], destMACBin[49];
+                macToBinary48(table[srcIdx].mac, srcMACBin);
+                macToBinary48(table[destIdx].mac, destMACBin);
+
+                // CRC Key (generator polynomial)
+                char crcKey[] = "1101";  // x^3 + x^2 + 1
+
+                // Build network header (ports + IPs + MACs)
+                char netHeader[500];
+                buildNetworkHeader(netHeader, srcPortBits, destPortBits, srcIPBin, destIPBin);
+                strcat(netHeader, srcMACBin);
+                strcat(netHeader, destMACBin);
+
+                printf("\n======== LAYER 4: DATA LINK (Byte-Count + CRC) ========\n");
+                printf("CRC Polynomial: %s\n", crcKey);
+
+                // Process each packet as a frame
+                for (int i = 0; i < packetCount; i++) {
+                    // Frame payload = network header + packet data
+                    char framePayload[MAX_FRAME_SIZE];
+                    snprintf(framePayload, MAX_FRAME_SIZE, "%s%s", netHeader, packets[i]);
+
+                    ByteCountFrame frame;
+                    buildFrame(&frame, framePayload, crcKey);
+                    sendFrame(&frame, crcKey);
+
+                    // Ask user if they want to inject error
+                    char injectChoice;
+                    printf("\nInject error in this frame? (y/n): ");
+                    scanf(" %c", &injectChoice);
+                    bool inject = (injectChoice == 'y' || injectChoice == 'Y');
+
+                    receiveFrame(&frame, crcKey, inject);
+                    printf("\n");
+                }
+                break;
+            }
+            case 6:
+                printf("Exiting...\n");
+                break;
+            default:
+                printf("Invalid choice.\n");
+        }
+    }
+    return 0;
+}
+
+abishekvh@Abisheks-MacBook-Air EX2 % cat Sender.c
+
+#include <stdio.h>
+#include <string.h>
+
+#include "Sender.h"
+
+// ---------- CRC IMPLEMENTATION ----------
+
+bool is_binary(const char *s) {
+    if (!s) return false;
+    for (int i = 0; s[i]; i++) {
+        if (s[i] != '0' && s[i] != '1') return false;
+    }
+    return true;
+}
+
+void findXor(const char a[], const char b[], char result[], int n) {
+    for (int i = 1; i < n; i++) {
+        result[i - 1] = (a[i] == b[i]) ? '0' : '1';
+    }
+    result[n - 1] = '\0';
+}
+
+void mod2div(const char dividend[], const char divisor[], char remainder[]) 
+{
+    int pick = strlen(divisor);
+    int n = strlen(dividend);
+    int divisorLen = pick;
+
+    if (divisorLen > n || divisorLen <= 1) 
+    {
+        remainder[0] = '\0';
+        return;
+    }
+
+    char tmp[CRC_MAX_LEN];
+    char xorResult[CRC_MAX_LEN];
+    char zeros[CRC_MAX_LEN];
+
+    for (int i = 0; i < divisorLen; i++) zeros[i] = '0';
+    zeros[divisorLen] = '\0';
+
+    strncpy(tmp, dividend, divisorLen);
+    tmp[divisorLen] = '\0';
+
+    while (pick < n) 
+    {
+        if (tmp[0] == '1')
+            findXor(divisor, tmp, xorResult, divisorLen);
+        else
+            findXor(zeros, tmp, xorResult, divisorLen);
+
+        int len = strlen(xorResult);
+        if (len + 1 >= CRC_MAX_LEN) break;
+        xorResult[len] = dividend[pick];
+        xorResult[len + 1] = '\0';
+
+        strncpy(tmp, xorResult, CRC_MAX_LEN - 1);
+        tmp[CRC_MAX_LEN - 1] = '\0';
+        pick++;
+    }
+
+    // Final XOR
+    if (tmp[0] == '1')
+        findXor(divisor, tmp, remainder, divisorLen);
+    else
+        findXor(zeros, tmp, remainder, divisorLen);
+}
+
+// Encode data with CRC: code = data + remainder
+void encodeData(const char data[], const char key[], char code[]) 
+{
+    if (!is_binary(data) || !is_binary(key) || strlen(key) < 2) 
+    {
+        printf("Error: Invalid input for CRC encoding\n");
+        code[0] = '\0';
+        return;
+    }
+
+    char paddedData[CRC_MAX_LEN] = {0};
+    char remainder[CRC_MAX_LEN] = {0};
+
+    strncpy(paddedData, data, CRC_MAX_LEN - 1);
+    int zeros = strlen(key) - 1;
+    if (strlen(paddedData) + zeros >= CRC_MAX_LEN) {
+        printf("Error: Data too long for CRC buffer\n");
+        code[0] = '\0';
+        return;
+    }
+    for (int i = 0; i < zeros; i++) strcat(paddedData, "0");
+
+    mod2div(paddedData, key, remainder);
+
+    strncpy(code, data, CRC_MAX_LEN - 1);
+    strncat(code, remainder, CRC_MAX_LEN - strlen(code) - 1);
+}
+
+// ---------- SENDER FUNCTIONS ----------
+
+// Build frame with Byte-Count + CRC
+void buildFrame(ByteCountFrame *frame, const char *payload, const char *crcKey) {
+    frame->frameDelimiter = 0x7E;
+    frame->destAddr = 0x01;
+    frame->srcAddr = 0x02;
+
+    int dataBytes = strlen(payload) / 8;
+    frame->byteCount = (unsigned short)dataBytes;
+
+    strncpy(frame->data, payload, MAX_FRAME_SIZE - 1);
+    frame->data[MAX_FRAME_SIZE - 1] = '\0';
+
+    // Compute CRC over: byteCount (2 bytes) + data
+    char crcInput[CRC_MAX_LEN] = {0};
+    char byteCountBits[17];
+    toBinary(frame->byteCount, 16, byteCountBits);
+    strcat(crcInput, byteCountBits);
+    strcat(crcInput, payload);
+
+    encodeData(crcInput, crcKey, frame->crc);
+    // Extract just the remainder (last keyLen-1 bits)
+    int remLen = strlen(crcKey) - 1;
+    int codeLen = strlen(frame->crc);
+    if (codeLen >= remLen) {
+        char *remStart = frame->crc + codeLen - remLen;
+        memmove(frame->crc, remStart, remLen + 1);
+    }
+
+    frame->valid = true;
+}
+
+// Send frame (display)
+void sendFrame(const ByteCountFrame *frame, const char *crcKey) {
+    printf("\n========== SENDER SIDE (Byte-Count Frame) ==========\n");
+    printf("Flag (0x7E)     : 0x%02X\n", frame->frameDelimiter);
+    printf("Dest Address    : 0x%02X\n", frame->destAddr);
+    printf("Src Address     : 0x%02X\n", frame->srcAddr);
+    printf("Byte Count      : %u bytes (0x%04X)\n", frame->byteCount, frame->byteCount);
+    printf("Data (bits)     : %s\n", frame->data);
+    printf("CRC Key         : %s\n", crcKey);
+    printf("CRC Remainder   : %s\n", frame->crc);
+    printf("Codeword Sent   : %s%s\n", frame->data, frame->crc);
+    printf("====================================================\n");
+}
+
+abishekvh@Abisheks-MacBook-Air EX2 % cat Reciever.c
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "Sender.h"
+
+// Verify received codeword: returns true if no error (remainder all zeros)
+bool verifyCRC(const char code[], const char key[]) 
+{
+    if (!is_binary(code) || !is_binary(key) || strlen(key) < 2) return false;
+
+    char remainder[CRC_MAX_LEN];
+    mod2div(code, key, remainder);
+
+    for (int i = 0; remainder[i]; i++) {
+        if (remainder[i] == '1') return false;  // Error detected
+    }
+    return true;  // No error
+}
+
+// Receive frame with error injection option
+bool receiveFrame(ByteCountFrame *frame, const char *crcKey, bool injectError) {
+    printf("\n========== RECEIVER SIDE (Byte-Count Frame) ==========\n");
+
+    // Check flag
+    if (frame->frameDelimiter != 0x7E) {
+        printf("[Error] Invalid frame delimiter!\n");
+        return false;
+    }
+    printf("[Receiver] Flag (0x7E) verified.\n");
+
+    // Reconstruct codeword for verification: byteCount + data + CRC remainder
+    char byteCountBits[17];
+    toBinary(frame->byteCount, 16, byteCountBits);
+    char codeword[CRC_MAX_LEN];
+    snprintf(codeword, CRC_MAX_LEN, "%s%s%s", byteCountBits, frame->data, frame->crc);
+
+    // Inject error if requested
+    if (injectError && strlen(codeword) > 0) {
+        int pos = rand() % strlen(codeword);
+        codeword[pos] = (codeword[pos] == '0') ? '1' : '0';
+        printf("\n*** ERROR INJECTED: Flipped bit at position %d ***\n", pos);
+        printf("Corrupted Codeword: %s\n", codeword);
+    }
+
+    // Verify CRC
+    bool crcOk = verifyCRC(codeword, crcKey);
+
+    printf("Byte Count      : %u bytes\n", frame->byteCount);
+    printf("Received Data   : %s\n", frame->data);
+    printf("CRC Key         : %s\n", crcKey);
+    printf("CRC Remainder   : %s\n", frame->crc);
+    printf("Codeword Check  : %s\n", codeword);
+
+    if (crcOk) {
+        printf("[SUCCESS] CRC verification PASSED - No errors detected!\n");
+    } else {
+        printf("[ERROR] CRC verification FAILED - Error detected!\n");
+    }
+    printf("========================================================\n");
+
+    return crcOk;
+}
+
+abishekvh@Abisheks-MacBook-Air EX2 % gcc Main.c Sender.c Reciever.c
+abishekvh@Abisheks-MacBook-Air EX2 % ./a.out
+5
+
+======= MENU =======
+1. Display Hash Table
+2. Add URL Entry
+3. Update Entry
+4. Delete Entry
+5. Run Network Layers (Byte-Count + CRC)
+6. Exit
+Select (1-6): 
+Enter Source URL: www.google.com
+Enter Destination URL: www.youtube.com
+
+======== LAYER 1: APPLICATION ========
+Message: hello
+Bitstream (40 bits):
+0110100001100101011011000110110001101111
+
+======== LAYER 2: TRANSPORT ========
+Src Port:  58082 (1110001011100010)
+Dest Port: 53858 (1101001001100010)
+
+======== LAYER 3: NETWORK ========
+Src IP:  10001110111110100000101000000001 (142.250.10.1)
+Dest IP: 10001110111110100000101000000010 (142.250.10.2)
+Packets: 3
+  Packet 1: 0110100001100101
+  Packet 2: 0110110001101100
+  Packet 3: 0110111100000000
+
+======== LAYER 4: DATA LINK (Byte-Count + CRC) ========
+CRC Polynomial: 1101
+
+========== SENDER SIDE (Byte-Count Frame) ==========
+Flag (0x7E)     : 0x7E
+Dest Address    : 0x01
+Src Address     : 0x02
+Byte Count      : 26 bytes (0x001A)
+Data (bits)     : 1110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110100001100101
+CRC Key         : 1101
+CRC Remainder   : 101
+Codeword Sent   : 1110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110100001100101101
+====================================================
+
+Inject error in this frame? (y/n): n
+
+========== RECEIVER SIDE (Byte-Count Frame) ==========
+[Receiver] Flag (0x7E) verified.
+Byte Count      : 26 bytes
+Received Data   : 1110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110100001100101
+CRC Key         : 1101
+CRC Remainder   : 101
+Codeword Check  : 00000000000110101110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110100001100101101
+[SUCCESS] CRC verification PASSED - No errors detected!
+========================================================
+
+
+========== SENDER SIDE (Byte-Count Frame) ==========
+Flag (0x7E)     : 0x7E
+Dest Address    : 0x01
+Src Address     : 0x02
+Byte Count      : 26 bytes (0x001A)
+Data (bits)     : 1110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110110001101100
+CRC Key         : 1101
+CRC Remainder   : 000
+Codeword Sent   : 1110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110110001101100000
+====================================================
+
+Inject error in this frame? (y/n): y
+
+========== RECEIVER SIDE (Byte-Count Frame) ==========
+[Receiver] Flag (0x7E) verified.
+
+*** ERROR INJECTED: Flipped bit at position 97 ***
+Corrupted Codeword: 00000000000110101110001011100010110100100110001010001110111110100000101000000001100011101111101001001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110110001101100000
+Byte Count      : 26 bytes
+Received Data   : 1110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110110001101100
+CRC Key         : 1101
+CRC Remainder   : 000
+Codeword Check  : 00000000000110101110001011100010110100100110001010001110111110100000101000000001100011101111101001001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110110001101100000
+[ERROR] CRC verification FAILED - Error detected!
+========================================================
+
+
+========== SENDER SIDE (Byte-Count Frame) ==========
+Flag (0x7E)     : 0x7E
+Dest Address    : 0x01
+Src Address     : 0x02
+Byte Count      : 26 bytes (0x001A)
+Data (bits)     : 1110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110111100000000
+CRC Key         : 1101
+CRC Remainder   : 111
+Codeword Sent   : 1110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110111100000000111
+====================================================
+
+Inject error in this frame? (y/n): n
+
+========== RECEIVER SIDE (Byte-Count Frame) ==========
+[Receiver] Flag (0x7E) verified.
+Byte Count      : 26 bytes
+Received Data   : 1110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110111100000000
+CRC Key         : 1101
+CRC Remainder   : 111
+Codeword Check  : 00000000000110101110001011100010110100100110001010001110111110100000101000000001100011101111101000001010000000101010101000010001001000100011001101000100010101011010101000010001001000100011001101000100011001100110111100000000111
+[SUCCESS] CRC verification PASSED - No errors detected!
+========================================================
+
+
+======= MENU =======
+1. Display Hash Table
+2. Add URL Entry
+3. Update Entry
+4. Delete Entry
+5. Run Network Layers (Byte-Count + CRC)
+6. Exit
+Select (1-6): 6
+Exiting...
+
+
+abishekvh@Abisheks-MacBook-Air Excercise Questions % cat BitwiseOperatorsProgram.c
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+void calculate_the_maximum(int n, int k) {
+  int max_and = 0;
+  int max_or = 0;
+  int max_xor = 0;
+
+  for (int i = 1; i <= n; i++) {
+    for (int j = i + 1; j <= n; j++) {
+      int current_and = i & j;
+      int current_or = i | j;
+      int current_xor = i ^ j;
+
+      if (current_and < k && current_and > max_and) {
+        max_and = current_and;
+      }
+      if (current_or < k && current_or > max_or) {
+        max_or = current_or;
+      }
+      if (current_xor < k && current_xor > max_xor) {
+        max_xor = current_xor;
+      }
+    }
+  }
+
+  printf("%d\n%d\n%d\n", max_and, max_or, max_xor);
+}
+
+int main() {
+  int n, k;
+
+  if (scanf("%d %d", &n, &k) == 2) {
+    calculate_the_maximum(n, k);
+  }
+
+  return 0;
+}
+
+abishekvh@Abisheks-MacBook-Air Excercise Questions % gcc BitwiseOperatorsProgram.c
+abishekvh@Abisheks-MacBook-Air Excercise Questions % ./a.out
+5 4
+2
+3
+3
+
+
+abishekvh@Abisheks-MacBook-Air Excercise Questions % cat AlternatingBitsProgram.java
+
+import java.util.Scanner;
+
+class AlternatingBitsSolution
+{
+    public boolean hasAlternatingBits(int n)
+    {
+        int xor = n ^ (n >> 1);
+        return (xor & (xor + 1)) == 0;
+    }
+}
+
+public class AlternatingBitsProgram
+{
+    public static void main(String[] args)
+    {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter an integer: ");
+        int n = scanner.nextInt();
+
+        AlternatingBitsSolution solver = new AlternatingBitsSolution();
+        boolean result = solver.hasAlternatingBits(n);
+        System.out.println("Result: " + result);
+
+        scanner.close();
+    }
+}
+
+abishekvh@Abisheks-MacBook-Air Excercise Questions % javac AlternatingBitsProgram.java
+abishekvh@Abisheks-MacBook-Air Excercise Questions % java AlternatingBitsProgram
+Enter an integer: 5
+Result: true
+
+
+abishekvh@Abisheks-MacBook-Air Excercise Questions % cat BinaryAdditionProgram.java
+
+import java.util.Scanner;
+
+class BinaryAdditionSolution
+{
+    public String addBinary(String a, String b)
+    {
+        StringBuilder result = new StringBuilder();
+        int i = a.length() - 1;
+        int j = b.length() - 1;
+        int carry = 0;
+
+        while (i >= 0 || j >= 0 || carry > 0)
+        {
+            int sum = carry;
+
+            if (i >= 0)
+            {
+                sum += a.charAt(i) - '0';
+                i--;
+            }
+            if (j >= 0)
+            {
+                sum += b.charAt(j) - '0';
+                j--;
+            }
+
+            result.append(sum % 2);
+            carry = sum / 2;
+        }
+
+        return result.reverse().toString();
+    }
+}
+
+public class BinaryAdditionProgram
+{
+    public static void main(String[] args)
+    {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter first binary string: ");
+        String a = scanner.next();
+        System.out.print("Enter second binary string: ");
+        String b = scanner.next();
+
+        BinaryAdditionSolution solver = new BinaryAdditionSolution();
+        String result = solver.addBinary(a, b);
+        System.out.println("Result: " + result);
+
+        scanner.close();
+    }
+}
+
+abishekvh@Abisheks-MacBook-Air Excercise Questions % javac BinaryAdditionProgram.java
+abishekvh@Abisheks-MacBook-Air Excercise Questions % java BinaryAdditionProgram
+Enter first binary string: 1010
+Enter second binary string: 1011
+Result: 10101
+
+
+abishekvh@Abisheks-MacBook-Air Excercise Questions % cat SubarrayOrsProgram.java
+
+import java.util.Scanner;
+import java.util.HashSet;
+import java.util.Set;
+
+class SubarrayOrsSolution
+{
+    public int subarrayBitwiseORs(int[] arr)
+    {
+        Set<Integer> result = new HashSet<>();
+        Set<Integer> prev = new HashSet<>();
+
+        for (int x : arr)
+        {
+            Set<Integer> curr = new HashSet<>();
+            curr.add(x);
+
+            for (int y : prev)
+            {
+                curr.add(y | x);
+            }
+
+            result.addAll(curr);
+            prev = curr;
+        }
+
+        return result.size();
+    }
+}
+
+public class SubarrayOrsProgram
+{
+    public static void main(String[] args)
+    {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter array size: ");
+        int size = scanner.nextInt();
+        int[] arr = new int[size];
+
+        System.out.print("Enter array elements: ");
+        for (int i = 0; i < size; i++)
+        {
+            arr[i] = scanner.nextInt();
+        }
+
+        SubarrayOrsSolution solver = new SubarrayOrsSolution();
+        int result = solver.subarrayBitwiseORs(arr);
+        System.out.println("Total unique subarray ORs: " + result);
+
+        scanner.close();
+    }
+}
+
+abishekvh@Abisheks-MacBook-Air Excercise Questions % javac SubarrayOrsProgram.java
+abishekvh@Abisheks-MacBook-Air Excercise Questions % java SubarrayOrsProgram
+Enter array size: 3
+Enter array elements: 1 2 3
+Total unique subarray ORs: 3
+
