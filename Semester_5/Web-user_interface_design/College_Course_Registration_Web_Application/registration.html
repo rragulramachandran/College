@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ABC College - Registration</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+    <h1>ABC College</h1>
+    <p>Course Registration Portal</p>
+</header>
+
+<nav>
+    <a href="index.html">Home</a>
+    <a href="courses.html">Courses</a>
+    <a href="departments.html">Departments</a>
+    <a href="faculty.html">Faculty</a>
+    <a href="registration.html">Registration</a>
+    <a href="services.html">Services</a>
+    <a href="contact.html">Contact</a>
+</nav>
+
+<main>
+    <h2>Course Registration Form</h2>
+
+    <form onsubmit="showMessage(event)">
+
+        <label>Student Name:</label>
+        <input type="text" required>
+
+        <label>Register Number:</label>
+        <input type="text" required>
+
+        <label>Email:</label>
+        <input type="email" required>
+
+        <label>Mobile Number:</label>
+        <input type="tel" pattern="[0-9]{10}" required>
+
+        <label>Date of Birth:</label>
+        <input type="date" required>
+
+        <label>Department:</label>
+        <select required>
+            <option value="">Select Department</option>
+            <option>Computer Science</option>
+            <option>Information Technology</option>
+            <option>Electronics</option>
+            <option>Mechanical Engineering</option>
+            <option>Civil Engineering</option>
+        </select>
+
+        <label>Semester:</label>
+        <input type="number" min="1" max="8" required>
+
+        <label>Course:</label>
+        <select required>
+            <option value="">Select Course</option>
+            <option>CS101 - Web Programming</option>
+            <option>CS201 - Data Structures</option>
+            <option>IT101 - Database Systems</option>
+            <option>IT201 - Cloud Computing</option>
+        </select>
+
+        <label>Credits:</label>
+        <input type="number" min="1" max="30" required>
+
+        <label>Elective:</label>
+        <select required>
+            <option value="">Select Elective</option>
+            <option>Artificial Intelligence</option>
+            <option>Cloud Computing</option>
+            <option>Cyber Security</option>
+        </select>
+
+        <label>Registration Date:</label>
+        <input type="date" required>
+
+        <br>
+
+        <label>
+            <input type="checkbox" required>
+            I confirm that the information is correct.
+        </label>
+
+        <br>
+
+        <button type="submit">Submit</button>
+        <button type="reset">Clear</button>
+
+        <p id="message"></p>
+
+    </form>
+</main>
+
+<footer>
+    <p>ABC College &copy; 2026</p>
+</footer>
+
+<script src="script.js"></script>
+
+</body>
+</html>
