@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ABC College - Contact</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+    <h1>ABC College</h1>
+    <p>Course Registration Portal</p>
+</header>
+
+<nav>
+    <a href="index.html">Home</a>
+    <a href="courses.html">Courses</a>
+    <a href="departments.html">Departments</a>
+    <a href="faculty.html">Faculty</a>
+    <a href="registration.html">Registration</a>
+    <a href="services.html">Services</a>
+    <a href="contact.html">Contact</a>
+</nav>
+
+<main>
+    <h2>Contact Us</h2>
+
+    <h3>College Address</h3>
+    <p>
+        ABC College<br>
+        College Road<br>
+        Tamil Nadu, India
+    </p>
+
+    <h3>Phone</h3>
+    <p>9876543210</p>
+
+    <h3>Email</h3>
+    <p>college@example.com</p>
+
+    <h3>Office Hours</h3>
+    <table>
+        <tr>
+            <th>Day</th>
+            <th>Time</th>
+        </tr>
+        <tr>
+            <td>Monday - Friday</td>
+            <td>9:00 AM - 5:00 PM</td>
+        </tr>
+        <tr>
+            <td>Saturday</td>
+            <td>9:00 AM - 1:00 PM</td>
+        </tr>
+        <tr>
+            <td>Sunday</td>
+            <td>Closed</td>
+        </tr>
+    </table>
+
+    <h3>Send an Enquiry</h3>
+
+    <form onsubmit="sendMessage(event)">
+        <label>Name:</label>
+        <input type="text" required>
+
+        <label>Email:</label>
+        <input type="email" required>
+
+        <label>Message:</label>
+        <textarea rows="5" required></textarea>
+
+        <button type="submit">Send</button>
+
+        <p id="contactMessage"></p>
+    </form>
+</main>
+
+<footer>
+    <p>ABC College &copy; 2026</p>
+</footer>
+
+<script src="script.js"></script>
+
+</body>
+</html>
