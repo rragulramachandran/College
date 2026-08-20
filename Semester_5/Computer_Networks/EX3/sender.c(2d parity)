@@ -1,0 +1,151 @@
+#include <stdio.h>
+#include <string.h>
+
+#define COLS 7
+#define MAX_MSG 100
+
+int sender[MAX_MSG + 1][COLS + 1];
+int ROWS;
+char message[MAX_MSG + 1];
+
+void getData();
+void calculateRowParity();
+void calculateColumnParity();
+void displaySender();
+void writeToChannel();
+
+void getData()
+{
+    int i, j;
+    unsigned char ch;
+
+    printf("Enter message: ");
+    fgets(message, sizeof(message), stdin);
+
+    int len = strlen(message);
+    if(len > 0 && message[len - 1] == '\n')
+    {
+        message[len - 1] = '\0';
+        len--;
+    }
+
+    ROWS = len;
+
+    printf("\nMessage to 7-bit Binary Conversion:\n\n");
+
+    for(i = 0; i < ROWS; i++)
+    {
+        ch = (unsigned char)message[i] & 0x7F;   /* keep only 7 bits (standard ASCII) */
+
+        printf("'%c' (%3d) -> ", message[i], ch);
+
+        for(j = 0; j < COLS; j++)
+        {
+            sender[i][j] = (ch >> (6 - j)) & 1;
+            printf("%d", sender[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+void calculateRowParity()
+{
+    int i, j, count;
+
+    for(i = 0; i < ROWS; i++)
+    {
+        count = 0;
+
+        for(j = 0; j < COLS; j++)
+        {
+            if(sender[i][j] == 1)
+                count++;
+        }
+
+        sender[i][COLS] = count % 2;
+    }
+}
+
+void calculateColumnParity()
+{
+    int i, j, count;
+
+    for(j = 0; j < COLS; j++)
+    {
+        count = 0;
+
+        for(i = 0; i < ROWS; i++)
+        {
+            if(sender[i][j] == 1)
+                count++;
+        }
+
+        sender[ROWS][j] = count % 2;
+    }
+
+    count = 0;
+
+    for(j = 0; j < COLS; j++)
+    {
+        if(sender[ROWS][j] == 1)
+            count++;
+    }
+
+    sender[ROWS][COLS] = count % 2;
+}
+
+void displaySender()
+{
+    int i, j;
+
+    printf("\nSender 2D Parity Matrix (%d x %d data + parity row/col):\n\n", ROWS, COLS);
+
+    for(i = 0; i <= ROWS; i++)
+    {
+        for(j = 0; j <= COLS; j++)
+        {
+            printf("%d ", sender[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+void writeToChannel()
+{
+    FILE *fp;
+    int i, j;
+
+    fp = fopen("channel.txt", "w");
+
+    if(fp == NULL)
+    {
+        printf("\nError opening channel.txt\n");
+        return;
+    }
+
+    fprintf(fp, "%d %d\n", ROWS, COLS);
+
+    for(i = 0; i <= ROWS; i++)
+    {
+        for(j = 0; j <= COLS; j++)
+        {
+            fprintf(fp, "%d ", sender[i][j]);
+        }
+        fprintf(fp, "\n");
+    }
+
+    fclose(fp);
+
+    printf("\nMatrix written to channel.txt successfully.\n");
+}
+
+int main()
+{
+    getData();
+    calculateRowParity();
+    calculateColumnParity();
+    displaySender();
+    writeToChannel();
+
+    return 0;
+}
