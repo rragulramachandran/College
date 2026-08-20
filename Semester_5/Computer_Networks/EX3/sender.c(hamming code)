@@ -1,0 +1,255 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+#define MAX 100
+
+char data[MAX];
+char hamming[MAX];
+
+int dataBits;
+int parityBits;
+int totalBits;
+
+void getData();
+void calculateParityBits();
+void placeDataBits();
+void getCoveredPositions(int position, int covered[], int *count);
+void calculateParityBitsValue();
+void displaySender();
+void writeToChannel();
+
+int isPowerOfTwo(int n);
+
+int main()
+{
+    printf("\n========================================");
+    printf("\n        HAMMING CODE - SENDER");
+    printf("\n========================================\n");
+
+    getData();
+
+    calculateParityBits();
+
+    placeDataBits();
+
+    calculateParityBitsValue();
+
+    displaySender();
+
+    writeToChannel();
+
+    return 0;
+}
+
+void getData()
+{
+    char message[MAX];
+    int i, j, len;
+    unsigned char ch;
+
+    printf("\nEnter message : ");
+    fgets(message, sizeof(message), stdin);
+
+    len = strlen(message);
+    if(len > 0 && message[len - 1] == '\n')
+    {
+        message[len - 1] = '\0';
+        len--;
+    }
+
+    if(len == 0)
+    {
+        printf("Message cannot be empty.\n");
+        exit(1);
+    }
+
+    dataBits = 0;
+
+    printf("\nConverting message to binary (8 bits per character):\n\n");
+
+    for(i = 0; i < len; i++)
+    {
+        ch = (unsigned char)message[i];
+        printf("'%c' (%3d) -> ", ch, ch);
+
+        for(j = 7; j >= 0; j--)
+        {
+            data[dataBits] = ((ch >> j) & 1) ? '1' : '0';
+            printf("%c", data[dataBits]);
+            dataBits++;
+        }
+        printf("\n");
+    }
+
+    data[dataBits] = '\0';
+
+    printf("\nNumber of Data Bits : %d\n", dataBits);
+}
+
+void calculateParityBits()
+{
+    parityBits = 0;
+
+    while(pow(2, parityBits) < (dataBits + parityBits + 1))
+    {
+        parityBits++;
+    }
+
+    totalBits = dataBits + parityBits;
+
+    printf("\nParity Bits Required : %d", parityBits);
+    printf("\nTotal Hamming Bits   : %d\n", totalBits);
+}
+
+int isPowerOfTwo(int n)
+{
+    if(n == 1)
+        return 1;
+
+    while(n > 1)
+    {
+        if(n % 2 != 0)
+            return 0;
+
+        n /= 2;
+    }
+
+    return 1;
+}
+
+void placeDataBits()
+{
+    int i, j = 0;
+
+    printf("\nPlacing Data and Parity Bits:\n");
+
+    for(i = 1; i <= totalBits; i++)
+    {
+        if(isPowerOfTwo(i))
+        {
+            hamming[i] = '0';
+            printf("Position %2d -> P\n", i);
+        }
+        else
+        {
+            hamming[i] = data[j++];
+            printf("Position %2d -> %c\n", i, hamming[i]);
+        }
+    }
+}
+
+/* Computes which bit positions a parity bit at "position" covers.
+   Includes the parity bit's own position in the list (standard
+   Hamming grouping); callers can filter it out when printing
+   "depends on" if they want the pure dependency list. */
+void getCoveredPositions(int position, int covered[], int *count)
+{
+    int j, k;
+
+    *count = 0;
+
+    for(j = position; j <= totalBits; j += 2 * position)
+    {
+        for(k = j; k < j + position && k <= totalBits; k++)
+        {
+            covered[*count] = k;
+            (*count)++;
+        }
+    }
+}
+
+void calculateParityBitsValue()
+{
+    int i, k, parity;
+    int covered[MAX], coveredCount;
+
+    printf("\nCalculating Even Parity Bits...\n");
+
+    for(i = 0; i < parityBits; i++)
+    {
+        int position = (int)pow(2, i);
+
+        getCoveredPositions(position, covered, &coveredCount);
+
+        printf("\nP%d (Position %d) depends on bit positions : ", position, position);
+        for(k = 0; k < coveredCount; k++)
+        {
+            if(covered[k] != position)
+                printf("%d ", covered[k]);
+        }
+        printf("\n");
+
+        parity = 0;
+
+        for(k = 0; k < coveredCount; k++)
+        {
+            if(covered[k] != position && hamming[covered[k]] == '1')
+                parity++;
+        }
+
+        hamming[position] = (parity % 2 == 0) ? '0' : '1';
+
+        printf("P%d = %c\n", position, hamming[position]);
+    }
+}
+
+void displaySender()
+{
+    int i;
+
+    printf("\n====================================");
+    printf("\n         HAMMING SENDER");
+    printf("\n====================================");
+
+    printf("\nOriginal Data : ");
+
+    for(i = 0; i < dataBits; i++)
+        printf("%c", data[i]);
+
+    printf("\n");
+
+    printf("\nGenerated Hamming Code : ");
+
+    for(i = 1; i <= totalBits; i++)
+        printf("%c", hamming[i]);
+
+    printf("\n");
+
+    printf("\nPosition-wise view:\n");
+
+    printf("Position : ");
+    for(i = totalBits; i >= 1; i--)
+        printf("%3d", i);
+    printf("\n");
+
+    printf("Bit      : ");
+    for(i = totalBits; i >= 1; i--)
+        printf("%3c", hamming[i]);
+    printf("\n");
+}
+
+void writeToChannel()
+{
+    FILE *fp;
+    int i;
+
+    fp = fopen("channel.txt", "w");
+
+    if(fp == NULL)
+    {
+        printf("\nError opening channel.txt\n");
+        return;
+    }
+
+    for(i = 1; i <= totalBits; i++)
+        fprintf(fp, "%c", hamming[i]);
+
+    fprintf(fp, "\n");
+
+    fclose(fp);
+
+    printf("\nHamming Code written to channel.txt successfully.\n");
+}
+
