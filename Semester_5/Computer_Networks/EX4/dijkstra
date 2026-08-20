@@ -1,0 +1,177 @@
+#include <stdio.h>
+#define INF 999999
+#define MAX 20
+#define HCAP (MAX*MAX)
+
+int n;
+int graph[MAX][MAX];
+int dist[MAX];
+int hops[MAX];
+int parent[MAX];
+int visited[MAX];
+
+int hv[HCAP], hd[HCAP], hsize;
+
+void swp(int i,int j){
+        int t=hv[i]; hv[i]=hv[j]; hv[j]=t;
+        t=hd[i]; hd[i]=hd[j]; hd[j]=t;
+}
+
+void upheap(int idx){
+        int p;
+        while(idx>0){
+                p=(idx-1)/2;
+                if(hd[p]<=hd[idx]) break;
+                swp(p,idx);
+                idx=p;
+        }
+}
+
+void downheap(int idx){
+        int l,r,small;
+        while(1){
+                l=2*idx+1; r=2*idx+2; small=idx;
+                if(l<hsize && hd[l]<hd[small]) small=l;
+                if(r<hsize && hd[r]<hd[small]) small=r;
+                if(small==idx) break;
+                swp(idx,small);
+                idx=small;
+        }
+}
+
+void push(int v,int d){
+        if(hsize>=HCAP) return;
+        hv[hsize]=v; hd[hsize]=d;
+        upheap(hsize);
+        hsize++;
+}
+
+int popmin(){
+        int v=hv[0];
+        hsize--;
+        hv[0]=hv[hsize];
+        hd[0]=hd[hsize];
+        downheap(0);
+        return v;
+}
+
+void readGraph(){
+        int i,j,edges,u,v,w;
+
+        printf("Enter number of nodes: ");
+        scanf("%d",&n);
+
+        for(i=0;i<n;i++)
+                for(j=0;j<n;j++)
+                        graph[i][j] = (i==j)?0:-1;
+
+        printf("Enter number of edges: ");
+        scanf("%d",&edges);
+
+        for(i=0;i<edges;i++){
+                printf("Edge %d - enter node1,node2,weight: ",i+1);
+                scanf("%d %d %d",&u,&v,&w);
+                if(u<0 || u>=n || v<0 || v>=n || w<0) {
+                    printf("Invalid edge, skipping\n");
+                    i--;
+                    continue;
+                }
+                graph[u][v]=w;
+                graph[v][u]=w;
+        }
+}
+
+void showGraph(){
+        int i,j;
+        printf("\nAdjacency Matrix (-1 = no link)\n\n    ");
+        for(i=0;i<n;i++) printf("%4d",i);
+        printf("\n");
+        for(i=0;i<n;i++){
+                printf("%3d ",i);
+                for(j=0;j<n;j++) printf("%4d",graph[i][j]);
+                printf("\n");
+        }
+}
+
+int findNextHop(int src,int dst){
+        int cur=dst;
+        if(src==dst) return src;
+        while(parent[cur]!=-1 && parent[cur]!=src)
+                cur=parent[cur];
+        if(parent[cur]==-1) return -1;
+        return cur;
+}
+
+void showPath(int dst){
+        int path[MAX],cnt=0,i;
+        while(dst!=-1){
+                path[cnt++]=dst;
+                dst=parent[dst];
+        }
+        for(i=cnt-1;i>=0;i--){
+                printf("%d",path[i]);
+                if(i!=0) printf(" -> ");
+        }
+}
+
+void showTable(int src){
+        int i,nh;
+        printf("\nRouting Table for Node %d (%d entries)\n",src,n-1);
+        printf("Dest\tCost\tPrevNode\tNextHop\tHops\tPath\n");
+        for(i=0;i<n;i++){
+                if(i==src) continue;
+                nh=findNextHop(src,i);
+                printf("%d\t",i);
+                if(dist[i]==INF) printf("INF\t"); else printf("%d\t",dist[i]);
+                if(parent[i]==-1) printf("-\t\t"); else printf("%d\t\t",parent[i]);
+                if(nh==-1) printf("-\t"); else printf("%d\t",nh);
+                if(hops[i]==INF) printf("-\t"); else printf("%d\t",hops[i]);
+                if(dist[i]==INF) printf("-\n");
+                else { showPath(i); printf("\n"); }
+        }
+}
+
+void dijkstra(int src){
+        int i,u,v,nd;
+
+        for(i=0;i<n;i++){
+                dist[i]=INF; hops[i]=INF; parent[i]=-1; visited[i]=0;
+        }
+        dist[src]=0; hops[src]=0;
+        hsize=0;
+        push(src,0);
+
+        while(hsize>0){
+                // greedy pick - always move to the unvisited node with the smallest distance found so far,
+                // regardless of how long the path becomes after that node - never revisit this choice
+                u=popmin();
+                if(visited[u]) continue;
+                visited[u]=1;
+
+                for(v=0;v<n;v++){
+                        if(!visited[v] && graph[u][v]>0){
+                                nd=dist[u]+graph[u][v];
+                                if(nd<dist[v]){
+                                        dist[v]=nd;
+                                        hops[v]=hops[u]+1;
+                                        parent[v]=u;
+                                        push(v,nd);
+                                }
+                        }
+                }
+        }
+        showTable(src);
+}
+
+int main(){
+        int src;
+
+        readGraph();
+        showGraph();
+
+        for(src=0;src<n;src++){
+            dijkstra(src);
+        }
+
+        return 0;
+}
