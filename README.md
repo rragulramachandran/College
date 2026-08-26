@@ -1,40 +1,42 @@
-# College Lab Programs
+# College Coursework
 
-A collection of laboratory programs completed during undergraduate coursework at Mepco Schlenk Engineering College.
+A structured archive of laboratory work completed during my undergraduate coursework at Mepco Schlenk Engineering College.
 
-## Repository Structure
+## Repository structure
 
-```
+```text
 College/
 ├── Semester_4/
-│   └── Design_and_Analysis_Of_Algorithm/   # DAA Lab (CS3401)
+│   └── Design_and_Analysis_Of_Algorithm/
 └── Semester_5/
-    └── Computer_Networks/                  # CN Lab (CS3591)
+    └── Computer_Networks/
 ```
 
-## Semesters
+## Covered subjects
 
-| Semester | Subject | Language | Exercises |
-|----------|---------|----------|-----------|
-| 4 | Design and Analysis of Algorithms | C++ | 9 |
-| 5 | Computer Networks | C | 3 |
+| Semester | Subject | Language |
+|---|---|---|
+| 4 | Design and Analysis of Algorithms | C++ |
+| 5 | Computer Networks | C |
 
-## How to Compile
+## Purpose
 
-**C++ programs (DAA):**
+This repository is an academic archive and learning reference. My larger application projects are maintained separately.
+
+## Running programs
+
+### C++
+
 ```bash
 g++ filename.cpp -o output
 ./output
 ```
 
-**C programs (CN):**
+### C
+
 ```bash
 gcc filename.c -o output
 ./output
 ```
 
-For multi-file programs (e.g., CN EX2):
-```bash
-gcc Main.c Sender.c Reciever.c -o output
-./output
-```
+For multi-file networking exercises, compile the required source files together with `gcc`.
