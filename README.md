@@ -1,6 +1,6 @@
 # College Coursework
 
-A structured archive of laboratory work completed during my undergraduate coursework at Mepco Schlenk Engineering College.
+> An organised archive of laboratory work and academic programming exercises completed during my undergraduate coursework at Mepco Schlenk Engineering College.
 
 ## Repository structure
 
@@ -21,7 +21,7 @@ College/
 
 ## Purpose
 
-This repository is an academic archive and learning reference. My larger application projects are maintained separately.
+This repository is maintained as an **academic archive and learning reference**. Larger application projects are maintained separately.
 
 ## Running programs
 
@@ -40,3 +40,7 @@ gcc filename.c -o output
 ```
 
 For multi-file networking exercises, compile the required source files together with `gcc`.
+
+## Repository status
+
+**Academic archive.** This repository is primarily for coursework reference rather than production software development.
