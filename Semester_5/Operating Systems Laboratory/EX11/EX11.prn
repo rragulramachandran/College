@@ -1,0 +1,208 @@
+24bcs161@mepcolinux:~$ cat diskschedule.c
+#include <stdio.h>
+#include <stdlib.h>
+
+int FCFS(int *cylst, int noOfReq, int totalCyl, int initialHeadPos);
+int SSTF(int *cylst, int noOfReq, int totalCyl, int initialHeadPos);
+int SCAN(int *cylst, int noOfReq, int totalCyl, int initialHeadPos);
+int CSCAN(int *cylst, int noOfReq, int totalCyl, int initialHeadPos);
+int LOOK(int *cylst, int noOfReq, int totalCyl, int initialHeadPos);
+int CLOOK(int *cylst, int noOfReq, int totalCyl, int initialHeadPos);
+
+int absDiff(int a, int b)
+{
+    return (a > b) ? (a - b) : (b - a);
+}
+
+int cmp(const void *a, const void *b)
+{
+    return (*(const int *)a - *(const int *)b);
+}
+
+int *sortedCopy(int *cylst, int n)
+{
+    int *s = (int *)malloc(n * sizeof(int));
+    for (int i = 0; i < n; i++)
+        s[i] = cylst[i];
+    qsort(s, n, sizeof(int), cmp);
+    return s;
+}
+
+int FCFS(int *cylst, int noOfReq, int totalCyl, int initialHeadPos)
+{
+    int total = 0;
+    int pos = initialHeadPos;
+
+    for (int i = 0; i < noOfReq; i++) {
+        total += absDiff(pos, cylst[i]);
+        pos = cylst[i];
+    }
+    return total;
+}
+
+int SSTF(int *cylst, int noOfReq, int totalCyl, int initialHeadPos)
+{
+    int *done = (int *)calloc(noOfReq, sizeof(int));
+    int total = 0;
+    int pos = initialHeadPos;
+
+    for (int count = 0; count < noOfReq; count++) {
+        int best = -1;
+        int bestDist = 0;
+
+        for (int i = 0; i < noOfReq; i++) {
+            if (!done[i]) {
+                int d = absDiff(pos, cylst[i]);
+                if (best == -1 || d < bestDist) {
+                    best = i;
+                    bestDist = d;
+                }
+            }
+        }
+        done[best] = 1;
+        total += bestDist;
+        pos = cylst[best];
+    }
+
+    free(done);
+    return total;
+}
+
+int SCAN(int *cylst, int noOfReq, int totalCyl, int initialHeadPos)
+{
+    int *s = sortedCopy(cylst, noOfReq);
+    int end = totalCyl - 1;
+    int total = 0;
+
+    total += end - initialHeadPos;
+
+    if (s[0] < initialHeadPos)
+        total += end - s[0];
+
+    free(s);
+    return total;
+}
+
+int CSCAN(int *cylst, int noOfReq, int totalCyl, int initialHeadPos)
+{
+    int *s = sortedCopy(cylst, noOfReq);
+    int end = totalCyl - 1;
+    int total = 0;
+
+    total += end - initialHeadPos;
+
+    if (s[0] < initialHeadPos) {
+        total += end;
+
+        int maxLeft = s[0];
+        for (int i = 0; i < noOfReq; i++)
+            if (s[i] < initialHeadPos)
+                maxLeft = s[i];
+
+        total += maxLeft - 0;
+    }
+
+    free(s);
+    return total;
+}
+
+int LOOK(int *cylst, int noOfReq, int totalCyl, int initialHeadPos)
+{
+    int *s = sortedCopy(cylst, noOfReq);
+    int total = 0;
+    int pos = initialHeadPos;
+
+    if (s[noOfReq - 1] > initialHeadPos) {
+        total += s[noOfReq - 1] - pos;
+        pos = s[noOfReq - 1];
+    }
+
+    if (s[0] < initialHeadPos)
+        total += pos - s[0];
+
+    free(s);
+    return total;
+}
+
+int CLOOK(int *cylst, int noOfReq, int totalCyl, int initialHeadPos)
+{
+    int *s = sortedCopy(cylst, noOfReq);
+    int total = 0;
+    int pos = initialHeadPos;
+
+    if (s[noOfReq - 1] > initialHeadPos) {
+        total += s[noOfReq - 1] - pos;
+        pos = s[noOfReq - 1];
+    }
+
+    if (s[0] < initialHeadPos) {
+        total += pos - s[0];
+
+        int maxLeft = s[0];
+        for (int i = 0; i < noOfReq; i++)
+            if (s[i] < initialHeadPos)
+                maxLeft = s[i];
+
+        total += maxLeft - s[0];
+    }
+
+    free(s);
+    return total;
+}
+
+int main(void)
+{
+    int noOfReq, totalCyl, initialHeadPos;
+
+    printf("Enter number of requests: ");
+    scanf("%d", &noOfReq);
+
+    printf("Enter total number of cylinders: ");
+    scanf("%d", &totalCyl);
+
+    printf("Enter initial head position: ");
+    scanf("%d", &initialHeadPos);
+
+    if (noOfReq <= 0 || totalCyl <= 0 ||
+        initialHeadPos < 0 || initialHeadPos >= totalCyl) {
+        printf("Invalid input.\n");
+        return 1;
+    }
+
+    int *cylst = (int *)malloc(noOfReq * sizeof(int));
+    printf("Enter the cylinder request queue: ");
+    for (int i = 0; i < noOfReq; i++) {
+        scanf("%d", &cylst[i]);
+        if (cylst[i] < 0 || cylst[i] >= totalCyl) {
+            printf("Request %d is outside the disk range.\n", cylst[i]);
+            free(cylst);
+            return 1;
+        }
+    }
+
+    printf("\n======== TOTAL HEAD MOVEMENTS ========\n");
+    printf("FCFS   : %d\n", FCFS (cylst, noOfReq, totalCyl, initialHeadPos));
+    printf("SSTF   : %d\n", SSTF (cylst, noOfReq, totalCyl, initialHeadPos));
+    printf("SCAN   : %d\n", SCAN (cylst, noOfReq, totalCyl, initialHeadPos));
+    printf("C-SCAN : %d\n", CSCAN(cylst, noOfReq, totalCyl, initialHeadPos));
+    printf("LOOK   : %d\n", LOOK (cylst, noOfReq, totalCyl, initialHeadPos));
+    printf("C-LOOK : %d\n", CLOOK(cylst, noOfReq, totalCyl, initialHeadPos));
+
+    free(cylst);
+    return 0;
+}
+24bcs161@mepcolinux:~$ gcc diskschedule.c
+24bcs161@mepcolinux:~$ ./a.out
+Enter number of requests: 8
+Enter total number of cylinders: 200
+Enter initial head position: 53
+Enter the cylinder request queue: 98 183 37 122 14 124 65 67
+
+======== TOTAL HEAD MOVEMENTS ========
+FCFS   : 640
+SSTF   : 236
+SCAN   : 331
+C-SCAN : 382
+LOOK   : 299
+C-LOOK : 322
+24bcs161@mepcolinux:~$ exit

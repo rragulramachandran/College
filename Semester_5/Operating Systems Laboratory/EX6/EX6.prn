@@ -1,0 +1,206 @@
+524bcs161@mepcolinux:~$ cat banker.c
+#include <stdio.h>
+
+#define MAX 10
+
+int n, m;
+int available[MAX];
+int max[MAX][MAX];
+int allocation[MAX][MAX];
+int need[MAX][MAX];
+
+int isSafe()
+{
+    int work[MAX];
+    int finish[MAX] = {0};
+    int safeSequence[MAX];
+    int count = 0;
+
+    for (int j = 0; j < m; j++)
+        work[j] = available[j];
+
+    while (count < n)
+    {
+        int before = count;
+
+        for (int i = 0; i < n; i++)
+        {
+            if (finish[i])
+                continue;
+
+            int j;
+            for (j = 0; j < m; j++)
+                if (need[i][j] > work[j])
+                    break;
+
+            if (j == m)
+            {
+                for (int k = 0; k < m; k++)
+                    work[k] += allocation[i][k];
+
+                finish[i] = 1;
+                safeSequence[count++] = i;
+            }
+        }
+
+        if (count == before)
+        {
+            printf("\nSystem is in UNSAFE state.\n");
+            return 0;
+        }
+    }
+
+    printf("\nSystem is in SAFE state.\nSafe Sequence: ");
+    for (int i = 0; i < n; i++)
+    {
+        printf("P%d", safeSequence[i]);
+        if (i != n - 1)
+            printf(" -> ");
+    }
+    printf("\n");
+    return 1;
+}
+
+int main()
+{
+    int process;
+    int request[MAX];
+
+    printf("Enter number of processes: ");
+    scanf("%d", &n);
+
+    printf("Enter number of resource types: ");
+    scanf("%d", &m);
+
+    if (n <= 0 || n > MAX || m <= 0 || m > MAX)
+    {
+        printf("Processes and resource types must be between 1 and %d.\n", MAX);
+        return 0;
+    }
+
+    printf("\nEnter Available resources:\n");
+    for (int j = 0; j < m; j++)
+        scanf("%d", &available[j]);
+
+    printf("\nEnter Maximum matrix:\n");
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < m; j++)
+            scanf("%d", &max[i][j]);
+
+    printf("\nEnter Allocation matrix:\n");
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < m; j++)
+            scanf("%d", &allocation[i][j]);
+
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < m; j++)
+            need[i][j] = max[i][j] - allocation[i][j];
+
+    printf("\nNeed Matrix:\n");
+    for (int i = 0; i < n; i++)
+    {
+        for (int j = 0; j < m; j++)
+            printf("%d ", need[i][j]);
+        printf("\n");
+    }
+
+    if (!isSafe())
+        return 0;
+
+    printf("\nEnter process number making request: ");
+    scanf("%d", &process);
+
+    if (process < 0 || process >= n)
+    {
+        printf("Invalid process number.\n");
+        return 0;
+    }
+
+    printf("Enter request vector:\n");
+    for (int j = 0; j < m; j++)
+        scanf("%d", &request[j]);
+
+    for (int j = 0; j < m; j++)
+    {
+        if (request[j] > need[process][j])
+        {
+            printf("\nError: Process has exceeded its maximum claim.\n");
+            return 0;
+        }
+    }
+
+    for (int j = 0; j < m; j++)
+    {
+        if (request[j] > available[j])
+        {
+            printf("\nResources are not available. P%d must wait.\n", process);
+            return 0;
+        }
+    }
+
+    for (int j = 0; j < m; j++)
+    {
+        available[j] -= request[j];
+        allocation[process][j] += request[j];
+        need[process][j] -= request[j];
+    }
+
+    if (isSafe())
+    {
+        printf("\nRequest can be GRANTED to P%d.\n", process);
+    }
+    else
+    {
+        printf("\nRequest cannot be granted. P%d must WAIT.\n", process);
+
+        for (int j = 0; j < m; j++)
+        {
+            available[j] += request[j];
+            allocation[process][j] -= request[j];
+            need[process][j] += request[j];
+        }
+    }
+
+    return 0;
+}
+24bcs161@mepcolinux:~$ gcc banker.c
+24bcs161@mepcolinux:~$ ./a.out
+Enter number of processes: 5
+Enter number of resource types: 3
+
+Enter Available resources:
+3 3 2
+
+Enter Maximum matrix:
+7 5 3
+3 2 2
+9 0 2
+2 2 2
+4 3 3
+
+Enter Allocation matrix:
+0 1 0
+2 0 0
+3 0 2
+2 1 1
+0 0 2
+
+Need Matrix:
+7 4 3 
+1 2 2 
+6 0 0 
+0 1 1 
+4 3 1 
+
+System is in SAFE state.
+Safe Sequence: P1 -> P3 -> P4 -> P0 -> P2
+
+Enter process number making request: 1
+Enter request vector:
+1 0 2
+
+System is in SAFE state.
+Safe Sequence: P1 -> P3 -> P4 -> P0 -> P2
+
+Request can be GRANTED to P1.
+24bcs161@mepcolinux:~$ exit

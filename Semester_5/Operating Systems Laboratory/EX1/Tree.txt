@@ -1,0 +1,19 @@
+Code :
+
+int main()
+{
+    fork();
+    fork();
+    fork();
+    return 0;
+}
+
+Tree :
+
+            P1
+         /      \
+       P2        P3
+      /  \      /
+    P4   P6   P7
+    |
+   P8
