@@ -1,36 +1,20 @@
 # College Coursework
 
-> An organised archive of laboratory work and academic programming exercises completed during my undergraduate coursework at Mepco Schlenk Engineering College.
+An organised archive of laboratory work, programming exercises, and academic assignments completed during undergraduate coursework at Mepco Schlenk Engineering College.
 
 ## Repository structure
 
 ```text
 College/
+├── FreeOpenSourceSoftware/
 ├── Semester_4/
-│   └── Design_and_Analysis_Of_Algorithm/
-└── Semester_5/
-    └── Computer_Networks/
+├── Semester_5/
+└── README.md
 ```
 
-## Covered subjects
+Each subject or practical area has its own directory. Refer to the folders for the current assignment files and supporting materials; this structure evolves as coursework is added.
 
-| Semester | Subject | Language |
-|---|---|---|
-| 4 | Design and Analysis of Algorithms | C++ |
-| 5 | Computer Networks | C |
-
-## Purpose
-
-This repository is maintained as an **academic archive and learning reference**. Larger application projects are maintained separately.
-
-## Running programs
-
-### C++
-
-```bash
-g++ filename.cpp -o output
-./output
-```
+## Compiling programs
 
 ### C
 
@@ -39,8 +23,15 @@ gcc filename.c -o output
 ./output
 ```
 
-For multi-file networking exercises, compile the required source files together with `gcc`.
+### C++
 
-## Repository status
+```bash
+g++ -std=c++17 filename.cpp -o output
+./output
+```
 
-**Academic archive.** This repository is primarily for coursework reference rather than production software development.
+Replace the filename with the source file you want to run. Multi-file exercises may require compiling all related source files together, and some lab tasks require additional tools or setup described in their folders.
+
+## Purpose
+
+This repository is an **academic archive and learning reference**, not a single deployable application. Larger projects are maintained in separate repositories.
