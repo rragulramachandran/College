@@ -1,10 +1,7 @@
 # Assignment 3: Campus Task Planner Web Application
 
 **Course:** 19CSP01 – Free Open Source Software  
-**Student:** Ragul Ramachandran  
-**Register Number:** 24BCS174  
 **Institution:** MEPCO SCHLENK ENGINEERING COLLEGE (Autonomous), Sivakasi  
-
 ---
 
 ## Project Overview
