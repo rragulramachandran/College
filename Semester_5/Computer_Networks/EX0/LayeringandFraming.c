@@ -33,6 +33,17 @@ typedef struct
 
 HashEntry table[TABLE_SIZE];
 
+char message[MAX_MESSAGE_LEN + 1];
+char bitstream[MAX_BITS + 1];
+int totalBits;
+
+Ports connectionPorts;
+
+char packets[MAX_PACKETS][PACKET_BITS + 1];
+int packetCount;
+
+char frames[MAX_FRAMES][FRAME_BITS + 1];
+int frameCount;
 
 /* ===================== PURE / LOGIC FUNCTIONS ====================== */
 
@@ -193,29 +204,27 @@ void macToBinary48(char mac[], char out[])
     }
 }
 
-int applicationLayer(char message[], char bitstreamOut[])
+void applicationLayer(void)
 {
-    bitstreamOut[0] = '\0';
+    bitstream[0] = '\0';
     char charBits[9];
     for (int i = 0; message[i] != '\0'; i++)
     {
         toBinary((unsigned char) message[i], 8, charBits);
-        strcat(bitstreamOut, charBits);
+        strcat(bitstream, charBits);
     }
-    return (int) strlen(message) * 8;
+    totalBits = (int) strlen(message) * 8;
 }
 
-Ports transportLayer(void)
+void transportLayer(void)
 {
-    Ports p;
-    p.src  = 1024 + rand() % (65535 - 1024);
-    p.dest = 1024 + rand() % (65535 - 1024);
-    return p;
+    connectionPorts.src  = 1024 + rand() % (65535 - 1024);
+    connectionPorts.dest = 1024 + rand() % (65535 - 1024);
 }
 
-int networkLayer(char bitstream[], int totalBits, char packets[][PACKET_BITS + 1])
+void networkLayer(void)
 {
-    int packetCount = 0;
+    packetCount = 0;
     for (int pos = 0; pos < totalBits; pos += PACKET_BITS)
     {
         char chunk[PACKET_BITS + 1];
@@ -229,12 +238,11 @@ int networkLayer(char bitstream[], int totalBits, char packets[][PACKET_BITS + 1
         strcpy(packets[packetCount], chunk);
         packetCount++;
     }
-    return packetCount;
 }
 
-int dataLinkLayer(char packets[][PACKET_BITS + 1], int packetCount, char frames[][FRAME_BITS + 1])
+void dataLinkLayer(void)
 {
-    int frameCount = 0;
+    frameCount = 0;
     for (int p = 0; p < packetCount; p++)
     {
         for (int half = 0; half < 2; half++)
@@ -246,7 +254,6 @@ int dataLinkLayer(char packets[][PACKET_BITS + 1], int packetCount, char frames[
             frameCount++;
         }
     }
-    return frameCount;
 }
 
 
@@ -337,7 +344,6 @@ int main(void)
         }
     }
 
-    char message[MAX_MESSAGE_LEN + 1];
     if (readMessage("message.txt", message) != 0)
     {
         printf("ERROR: Could not open message.txt\n");
@@ -372,8 +378,7 @@ int main(void)
            table[destIndex].url, table[destIndex].ip, table[destIndex].mac);
 
     /* ---------------- LAYER 1 : APPLICATION ---------------- */
-    char bitstream[MAX_BITS + 1];
-    int totalBits = applicationLayer(message, bitstream);
+    applicationLayer();
 
     printf("\n================ LAYER 1 : APPLICATION LAYER ================\n");
     printf("Original Message : %s\n", message);
@@ -381,7 +386,7 @@ int main(void)
     printf("Total bits generated : %d\n", totalBits);
 
     /* ---------------- LAYER 2 : TRANSPORT ---------------- */
-    Ports connectionPorts = transportLayer();
+    transportLayer();
     char srcPortBits[17], destPortBits[17];
     toBinary(connectionPorts.src, 16, srcPortBits);
     toBinary(connectionPorts.dest, 16, destPortBits);
@@ -392,8 +397,7 @@ int main(void)
     printf("Message Payload  : %s\n", bitstream);
 
     /* ---------------- LAYER 3 : NETWORK ---------------- */
-    static char packets[MAX_PACKETS][PACKET_BITS + 1];
-    int packetCount = networkLayer(bitstream, totalBits, packets);
+    networkLayer();
 
     char srcIPBin[33], destIPBin[33];
     ipToBinary32(table[srcIndex].ip, srcIPBin);
@@ -421,8 +425,7 @@ int main(void)
     printf("\nTotal Packets Created : %d\n", packetCount);
 
     /* ---------------- LAYER 4 : DATA LINK ---------------- */
-    static char frames[MAX_FRAMES][FRAME_BITS + 1];
-    int frameCount = dataLinkLayer(packets, packetCount, frames);
+    dataLinkLayer();
 
     char srcMACBin[49], destMACBin[49];
     macToBinary48(table[srcIndex].mac, srcMACBin);

@@ -1,109 +1,110 @@
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <pthread.h>
 
-#define BUFFER_SIZE 1024
-
-int sockfd;
-int running = 1;
-
-struct sockaddr_in serverAddr;
-
-/* Receives messages from server */
-void *receiveMessages(void *arg)
+static int is_quit(const char *message)
 {
-    char buffer[BUFFER_SIZE];
-    int n;
-    socklen_t addrLen;
-
-    while (running)
-    {
-        addrLen = sizeof(serverAddr);
-
-        n = recvfrom(sockfd,
-                     buffer,
-                     sizeof(buffer) - 1,
-                     0,
-                     (struct sockaddr *)&serverAddr,
-                     &addrLen);
-
-        if (n < 0)
-        {
-            printf("Receive failed\n");
-            break;
-        }
-
-        buffer[n] = '\0';
-
-        printf("\n%s\n", buffer);
-        printf("You: ");
-        fflush(stdout);
-    }
-
-    return NULL;
+    return strcmp(message, "quit") == 0 || strcmp(message, "/quit") == 0;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-    char buffer[BUFFER_SIZE];
+    struct sockaddr_in saddr;
+    char buf[1024];
 
-    pthread_t receiveThread;
-
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-
-    if (sockfd < 0)
+    if (argc != 3)
     {
-        printf("Socket creation failed\n");
-        return 1;
+        fprintf(stderr, "Usage: %s <server_ip> <server_port>\n", argv[0]);
+        exit(EXIT_FAILURE);
     }
 
-    memset(&serverAddr, 0, sizeof(serverAddr));
+    int port = atoi(argv[2]);
 
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(5000);
-    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    if (port <= 0 || port > 65535)
+    {
+        fprintf(stderr, "Invalid port number: %s\n", argv[2]);
+        exit(EXIT_FAILURE);
+    }
 
-    printf("Connected to Chat Server\n");
-    printf("Type 'exit' to leave the chat.\n\n");
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
 
-    /* Thread for receiving messages */
-    pthread_create(&receiveThread,
-                   NULL,
-                   receiveMessages,
-                   NULL);
+    if (sock < 0)
+    {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
 
-    while (running)
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = htons(port);
+
+    if (inet_pton(AF_INET, argv[1], &saddr.sin_addr) <= 0)
+    {
+        fprintf(stderr, "Invalid server IP address: %s\n", argv[1]);
+        close(sock);
+        exit(EXIT_FAILURE);
+    }
+
+    if (connect(sock, (struct sockaddr *)&saddr, sizeof(saddr)) < 0)
+    {
+        perror("connect failed");
+        close(sock);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Connected to chat server at %s:%d\n", argv[1], port);
+    printf("Type 'quit' to end the chat.\n\n");
+    int n = recv(sock, buf, sizeof(buf) - 1, 0);
+
+    if (n > 0)
+    {
+        buf[n] = '\0';
+        printf("%s\n\n", buf);
+    }
+
+    while (1)
     {
         printf("You: ");
 
-        if (fgets(buffer, sizeof(buffer), stdin) == NULL)
-            break;
-
-        buffer[strcspn(buffer, "\n")] = '\0';
-
-        if (sendto(sockfd,
-                   buffer,
-                   strlen(buffer),
-                   0,
-                   (struct sockaddr *)&serverAddr,
-                   sizeof(serverAddr)) < 0)
+        if (fgets(buf, sizeof(buf), stdin) == NULL)
         {
-            printf("Send failed\n");
+            strcpy(buf, "quit");
+        }
+
+        buf[strcspn(buf, "\n")] = '\0';
+
+        if (send(sock, buf, strlen(buf), 0) < 0)
+        {
+            perror("send failed");
             break;
         }
 
-        if (strcmp(buffer, "exit") == 0)
+        if (is_quit(buf))
         {
-            running = 0;
+            printf("You ended the chat.\n");
+            break;
+        }
+
+        n = recv(sock, buf, sizeof(buf) - 1, 0);
+
+        if (n <= 0)
+        {
+            printf("Server disconnected.\n");
+            break;
+        }
+
+        buf[n] = '\0';
+        printf("%s\n\n", buf);
+
+        if (is_quit(buf))
+        {
+            printf("Server ended the chat.\n");
             break;
         }
     }
 
-    close(sockfd);
-
+    close(sock);
     return 0;
 }

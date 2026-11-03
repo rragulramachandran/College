@@ -1,0 +1,4 @@
+question,tcp,flows,bottleneck_mbps,queue_packets,error_rate,run,measure_start_s,measure_end_s,simulation_end_s,aggregate_goodput_mbps,jain_fairness,forward_queue_drops,forward_error_drops,pdr_percent,mean_delay_ms,lost_packets,retransmitted_data_segments,directory
+1,NewReno,1,1,20,0,1,1,30,45,0.96267,1,17,0,99.32512901945216,204.247,17,17,q1-baseline
+1,NewReno,1,5,20,0,1,1,30,45,4.80976,1,44,0,99.63869272458531,47.2285,44,44,q1-faster-link
+1,NewReno,1,1,100,0,1,1,30,45,0.96267,1,0,0,100.0,1012.0699999999999,0,0,q1-large-queue

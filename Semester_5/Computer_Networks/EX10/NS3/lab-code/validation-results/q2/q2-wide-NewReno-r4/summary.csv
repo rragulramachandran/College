@@ -1,0 +1,5 @@
+flow,tcp,goodput_mbps,ip_throughput_mbps,tx_packets,rx_packets,pdr_percent,mean_delay_ms,lost_packets,tx_minus_rx,retransmitted_data_segments,total_app_rx_bytes
+0,NewReno,1.95839,1.7525,11071,10956,98.9613,30.8241,115,115,115,15859944
+1,NewReno,2.41133,1.99522,12572,12473,99.2125,30.6987,99,99,99,18056560
+2,NewReno,2.58161,2.14114,13495,13385,99.1849,31.0188,110,110,110,19377136
+3,NewReno,2.63397,2.10737,13271,13173,99.2615,30.8734,98,98,97,19071608

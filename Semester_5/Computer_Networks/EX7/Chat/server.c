@@ -1,215 +1,130 @@
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <unistd.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <pthread.h>
-#define BUFFER_SIZE 1024
-#define MAX_CLIENTS 10
-struct Client { struct sockaddr_in address; };
-struct Client clients[MAX_CLIENTS];
-int clientCount = 0;
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-struct ClientData
-{
-    int sockfd;
-    struct sockaddr_in clientAddr;
-    char message[BUFFER_SIZE];
-};
-int findClient(struct sockaddr_in clientAddr)
-{
-    int i;
-    for (i = 0; i < clientCount; i++)
-        if (clients[i].address.sin_addr.s_addr == clientAddr.sin_addr.s_addr &&
-            clients[i].address.sin_port == clientAddr.sin_port) return i;
-    return -1;
-}
-void addClient(struct sockaddr_in clientAddr)
-{
-    if (findClient(clientAddr) == -1 && clientCount < MAX_CLIENTS)
-    {
-        clients[clientCount].address = clientAddr;
-        clientCount++;
-    }
-}
-void removeClient(struct sockaddr_in clientAddr)
-{
-    int index, i;
-    index = findClient(clientAddr);
-    if (index != -1)
-    {
-        for (i = index; i < clientCount - 1; i++) clients[i] = clients[i + 1];
-        clientCount--;
-    }
-}
-void *handleClient(void *arg)
-{
-    struct ClientData *data;
-    int i;
-    data = (struct ClientData *)arg;
-    pthread_mutex_lock(&lock);
-    addClient(data->clientAddr);
-    printf("Client [%s:%d]: %s\n",
-           inet_ntoa(data->clientAddr.sin_addr),
-           ntohs(data->clientAddr.sin_port),
-           data->message);
-    if (strcmp(data->message, "exit") == 0)
-    {
-        removeClient(data->clientAddr);
-        printf("Client disconnected.\n\n");
-        pthread_mutex_unlock(&lock);
-        free(data);
-        return NULL;
-    }
-    for (i = 0; i < clientCount; i++)
-    {
-        if (clients[i].address.sin_addr.s_addr !=
-                data->clientAddr.sin_addr.s_addr ||
-            clients[i].address.sin_port !=
-                data->clientAddr.sin_port)
-        {
-            char response[BUFFER_SIZE];
 
-            sprintf(response,
-                    "Client [%s:%d]: %s",
-                    inet_ntoa(data->clientAddr.sin_addr),
-                    ntohs(data->clientAddr.sin_port),
-                    data->message);
-
-            sendto(data->sockfd,
-                   response,
-                   strlen(response),
-                   0,
-                   (struct sockaddr *)&clients[i].address,
-                   sizeof(clients[i].address));
-        }
-    }
-
-    pthread_mutex_unlock(&lock);
-
-    free(data);
-
-    return NULL;
+static int is_quit(const char *message)
+{
+    return strcmp(message, "quit") == 0 || strcmp(message, "/quit") == 0;
 }
 
-void *serverChat(void *arg)
+int main(int argc, char *argv[])
 {
-    int sockfd;
-    char buffer[BUFFER_SIZE];
-    int i;
+    int connfd;
+    struct sockaddr_in saddr, caddr;
+    char buf[1024];
+    socklen_t addr_len;
 
-    sockfd = *(int *)arg;
-
-    while (1)
+    if (argc != 2)
     {
-        printf("Server: ");
-
-        if (fgets(buffer, sizeof(buffer), stdin) == NULL)
-            break;
-
-        buffer[strcspn(buffer, "\n")] = '\0';
-
-        if (strcmp(buffer, "exit") == 0)
-            break;
-
-        pthread_mutex_lock(&lock);
-
-        for (i = 0; i < clientCount; i++)
-        {
-            sendto(sockfd,
-                   buffer,
-                   strlen(buffer),
-                   0,
-                   (struct sockaddr *)&clients[i].address,
-                   sizeof(clients[i].address));
-        }
-
-        pthread_mutex_unlock(&lock);
+        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+        exit(EXIT_FAILURE);
     }
 
-    return NULL;
-}
+    int port = atoi(argv[1]);
 
-int main()
-{
-    int sockfd;
-    char buffer[BUFFER_SIZE];
-
-    struct sockaddr_in serverAddr, clientAddr;
-    socklen_t addrLen;
-
-    pthread_t thread;
-    pthread_t serverThread;
-
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-
-    if (sockfd < 0)
+    if (port <= 0 || port > 65535)
     {
-        printf("Socket creation failed\n");
-        return 1;
+        fprintf(stderr, "Invalid port number: %s\n", argv[1]);
+        exit(EXIT_FAILURE);
     }
 
-    memset(&serverAddr, 0, sizeof(serverAddr));
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
 
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(5000);
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(sockfd,
-             (struct sockaddr *)&serverAddr,
-             sizeof(serverAddr)) < 0)
+    if (sock < 0)
     {
-        printf("Bind failed\n");
-        close(sockfd);
-        return 1;
+        perror("socket failed");
+        exit(EXIT_FAILURE);
     }
 
-    printf("UDP Concurrent Chat Server is running...\n");
-    printf("Port: 5000\n");
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family = AF_INET;
+    saddr.sin_port = htons(port);
+    saddr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sock, (struct sockaddr *)&saddr, sizeof(saddr)) < 0)
+    {
+        perror("bind failed");
+        close(sock);
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(sock, 5) < 0)
+    {
+        perror("listen failed");
+        close(sock);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("TCP Chat Server listening on port %d...\n", port);
     printf("Waiting for clients...\n\n");
-
-    pthread_create(&serverThread, NULL, serverChat, &sockfd);
+    int cnum = 0;
 
     while (1)
     {
-        int n;
+        addr_len = sizeof(caddr);
+        connfd = accept(sock, (struct sockaddr *)&caddr, &addr_len);
 
-        struct ClientData *data;
-
-        addrLen = sizeof(clientAddr);
-
-        n = recvfrom(sockfd,
-                     buffer,
-                     sizeof(buffer) - 1,
-                     0,
-                     (struct sockaddr *)&clientAddr,
-                     &addrLen);
-
-        if (n < 0)
+        if (connfd < 0)
         {
-            printf("Receive failed\n");
+            perror("accept failed");
             continue;
         }
 
-        buffer[n] = '\0';
+        cnum++;
+        printf("Client %d connected.\n", cnum);
 
-        data = malloc(sizeof(struct ClientData));
+        if (fork() == 0)
+        {
+            close(sock);
+            char message[1024];
+            sprintf(message, "You are Client %d", cnum);
+            send(connfd, message, strlen(message), 0);
 
-        data->sockfd = sockfd;
-        data->clientAddr = clientAddr;
+            while (1)
+            {
+                int n = recv(connfd, buf, sizeof(buf) - 1, 0);
 
-        strcpy(data->message, buffer);
+                if (n <= 0)
+                {
+                    break;
+                }
 
-        pthread_create(&thread,
-                       NULL,
-                       handleClient,
-                       data);
+                buf[n] = '\0';
+                buf[strcspn(buf, "\n")] = '\0';
 
-        pthread_detach(thread);
+                if (is_quit(buf))
+                {
+                    break;
+                }
+
+                printf("Client %d: %s\n", cnum, buf);
+                printf("You(Server): ");
+
+                if (fgets(message, sizeof(message), stdin) == NULL)
+                {
+                    strcpy(message, "quit");
+                }
+
+                message[strcspn(message, "\n")] = '\0';
+                char output[1024];
+                sprintf(output, "You(Server): %s", message);
+                send(connfd, output, strlen(output), 0);
+
+                if (is_quit(message))
+                {
+                    break;
+                }
+            }
+
+            printf("Client %d has left the chat.\n", cnum);
+            close(connfd);
+            exit(0);
+        }
+
+        close(connfd);
+        waitpid(-1, NULL, WNOHANG);
     }
-
-    close(sockfd);
-
-    return 0;
 }

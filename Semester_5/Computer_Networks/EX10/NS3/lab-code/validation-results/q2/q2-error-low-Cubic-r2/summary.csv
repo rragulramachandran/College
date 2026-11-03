@@ -1,0 +1,5 @@
+flow,tcp,goodput_mbps,ip_throughput_mbps,tx_packets,rx_packets,pdr_percent,mean_delay_ms,lost_packets,tx_minus_rx,retransmitted_data_segments,total_app_rx_bytes
+0,Cubic,0.509001,0.443217,2918,2773,95.0308,121.484,145,145,148,4006616
+1,Cubic,0.522902,0.457297,2978,2861,96.0712,121.254,117,117,121,4132592
+2,Cubic,0.438802,0.371857,2448,2327,95.0572,120.542,121,121,122,3363704
+3,Cubic,0.453861,0.379212,2483,2372,95.5296,120.952,111,111,110,3431760

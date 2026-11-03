@@ -1,0 +1,8 @@
+student@cbl$ cd ns-allinone.3.34/ns-3.34/examples/tutorials
+
+student@cbl/ns-allinone.3.34/ns-3.34$ cp examples/tutorials/first.cc scratch/mypgm.cc
+
+
+student@cbl/ns-allinone.3.34/ns-3.34$ ./ns3 run scratch/mypgm.cc
+
+

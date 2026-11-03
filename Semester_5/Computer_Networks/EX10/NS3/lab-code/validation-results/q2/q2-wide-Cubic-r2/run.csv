@@ -1,0 +1,2 @@
+question,tcp,flows,bottleneck_mbps,queue_packets,error_rate,run,measure_start_s,measure_end_s,simulation_end_s,aggregate_goodput_mbps,jain_fairness,forward_queue_drops,forward_error_drops
+2,Cubic,4,10,20,0,2,11,61,76,9.63372,0.997562,1194,0

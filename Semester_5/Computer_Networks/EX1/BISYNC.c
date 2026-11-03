@@ -1,7 +1,41 @@
 #include <stdio.h>
 #include <string.h>
 
-void stuffing(char body[], char stuffed[])
+typedef struct {
+    char syn1[4];
+    char syn2[4];
+    char soh[4];
+    char header[50];
+    char stx[4];
+    char body[400];
+    char etx[4];
+    char crc[4];
+} BisyncFrame;
+
+char header[50];
+char body[200];
+char stuffedBody[400];
+char binaryBody[3200];
+char receivedBinaryBody[3200];
+char receivedStuffedBody[400];
+char destuffedBody[200];
+
+void printFrame(BisyncFrame f) {
+    printf("%s %s %s %s %s %s %s %s\n", f.syn1, f.syn2, f.soh, f.header, f.stx, f.body, f.etx, f.crc);
+}
+
+void buildFrame(BisyncFrame *f, const char *header, const char *body) {
+    strcpy(f->syn1, "SYN");
+    strcpy(f->syn2, "SYN");
+    strcpy(f->soh, "SOH");
+    strcpy(f->header, header);
+    strcpy(f->stx, "STX");
+    strcpy(f->body, body);
+    strcpy(f->etx, "ETX");
+    strcpy(f->crc, "CRC");
+}
+
+void stuffing(void)
 {
     int i = 0, j = 0;
 
@@ -9,86 +43,86 @@ void stuffing(char body[], char stuffed[])
     {
         if (strncmp(&body[i], "DLE", 3) == 0)
         {
-            strcpy(&stuffed[j], "DLEDLE");
+            strcpy(&stuffedBody[j], "DLEDLE");
             i += 3;
             j += 6;
         }
         else if (strncmp(&body[i], "STX", 3) == 0)
         {
-            strcpy(&stuffed[j], "DLESTX");
+            strcpy(&stuffedBody[j], "DLESTX");
             i += 3;
             j += 6;
         }
         else if (strncmp(&body[i], "ETX", 3) == 0)
         {
-            strcpy(&stuffed[j], "DLEETX");
+            strcpy(&stuffedBody[j], "DLEETX");
             i += 3;
             j += 6;
         }
         else if (strncmp(&body[i], "SOH", 3) == 0)
         {
-            strcpy(&stuffed[j], "DLESOH");
+            strcpy(&stuffedBody[j], "DLESOH");
             i += 3;
             j += 6;
         }
         else if (strncmp(&body[i], "SYN", 3) == 0)
         {
-            strcpy(&stuffed[j], "DLESYN");
+            strcpy(&stuffedBody[j], "DLESYN");
             i += 3;
             j += 6;
         }
         else
         {
-            stuffed[j++] = body[i++];
+            stuffedBody[j++] = body[i++];
         }
     }
 
-    stuffed[j] = '\0';
+    stuffedBody[j] = '\0';
 }
 
-void destuffing(char stuffed[], char body[])
+void destuffing(void)
 {
     int i = 0, j = 0;
 
-    while (stuffed[i] != '\0')
+    while (receivedStuffedBody[i] != '\0')
     {
-        if (strncmp(&stuffed[i], "DLEDLE", 6) == 0)
+        if (strncmp(&receivedStuffedBody[i], "DLEDLE", 6) == 0)
         {
-            strcpy(&body[j], "DLE");
+            strcpy(&destuffedBody[j], "DLE");
             i += 6;
             j += 3;
         }
-        else if (strncmp(&stuffed[i], "DLESTX", 6) == 0)
+        else if (strncmp(&receivedStuffedBody[i], "DLESTX", 6) == 0)
         {
-            strcpy(&body[j], "STX");
+            strcpy(&destuffedBody[j], "STX");
             i += 6;
             j += 3;
         }
-        else if (strncmp(&stuffed[i], "DLEETX", 6) == 0)
+        else if (strncmp(&receivedStuffedBody[i], "DLEETX", 6) == 0)
         {
-            strcpy(&body[j], "ETX");
+            strcpy(&destuffedBody[j], "ETX");
             i += 6;
             j += 3;
         }
-        else if (strncmp(&stuffed[i], "DLESOH", 6) == 0)
+        else if (strncmp(&receivedStuffedBody[i], "DLESOH", 6) == 0)
         {
-            strcpy(&body[j], "SOH");
+            strcpy(&destuffedBody[j], "SOH");
             i += 6;
             j += 3;
         }
-        else if (strncmp(&stuffed[i], "DLESYN", 6) == 0)
+        else if (strncmp(&receivedStuffedBody[i], "DLESYN", 6) == 0)
         {
-            strcpy(&body[j], "SYN");
+            strcpy(&destuffedBody[j], "SYN");
             i += 6;
             j += 3;
         }
         else
         {
-            body[j++] = stuffed[i++];
+            destuffedBody[j++] = receivedStuffedBody[i++];
         }
     }
 
-    body[j] = '\0';
+    destuffedBody[j] = '\0';
 }
 
 void stringToBinary(char* str, char* binaryStr)
@@ -117,31 +151,40 @@ void binaryToString(char* binaryStr, char* str)
 
 int main()
 {
-    char header[50];
-    char body[200];
-    char stuffedBody[400];
-    char binaryBody[3200];
-    char receivedBinaryBody[3200];
-    char receivedStuffedBody[400];
-    char destuffedBody[200];
-
     printf("========== BISYNC CHARACTER STUFFING ==========\n");
 
     printf("Enter Header : ");
     scanf("%s", header);
 
-    printf("Enter Body   : ");
-    scanf("%s", body);
+    FILE *inFile = fopen("input.txt", "r");
+    if (inFile != NULL) {
+        int len = 0;
+        int ch;
+        while ((ch = fgetc(inFile)) != EOF && len < 199) {
+            if (ch == '\n' || ch == '\r') continue;
+            body[len++] = (char)ch;
+        }
+        body[len] = '\0';
+        fclose(inFile);
+        printf("Body read from input.txt : %s\n", body);
+    } else {
+        printf("Error: Cannot open input.txt\n");
+        return 1;
+    }
 
-    stuffing(body, stuffedBody);
+    stuffing();
 
     printf("\n------------ SENDER ------------\n");
 
+    BisyncFrame originalFrame;
+    buildFrame(&originalFrame, header, body);
     printf("Original Frame :\n");
-    printf("SYN SYN SOH %s STX %s ETX CRC\n", header, body);
+    printFrame(originalFrame);
 
+    BisyncFrame stuffedFrame;
+    buildFrame(&stuffedFrame, header, stuffedBody);
     printf("\nStuffed Frame :\n");
-    printf("SYN SYN SOH %s STX %s ETX CRC\n", header, stuffedBody);
+    printFrame(stuffedFrame);
 
     stringToBinary(stuffedBody, binaryBody);
     printf("\nBinary Stuffed Body :\n%s\n", binaryBody);
@@ -166,13 +209,29 @@ int main()
 
     binaryToString(receivedBinaryBody, receivedStuffedBody);
 
+    BisyncFrame receivedFrame;
+    buildFrame(&receivedFrame, header, receivedStuffedBody);
     printf("\nReceived Frame :\n");
-    printf("SYN SYN SOH %s STX %s ETX CRC\n", header, receivedStuffedBody);
+    printFrame(receivedFrame);
 
-    destuffing(receivedStuffedBody, destuffedBody);
+    destuffing();
 
+    BisyncFrame destuffedFrame;
+    buildFrame(&destuffedFrame, header, destuffedBody);
     printf("\nDestuffed Frame :\n");
-    printf("SYN SYN SOH %s STX %s ETX CRC\n", header, destuffedBody);
+    printFrame(destuffedFrame);
+
+    FILE *outFile = fopen("output.txt", "w");
+    if (outFile != NULL) {
+        fprintf(outFile, "%s %s %s %s %s %s %s %s\n", 
+                destuffedFrame.syn1, destuffedFrame.syn2, destuffedFrame.soh, 
+                destuffedFrame.header, destuffedFrame.stx, destuffedFrame.body, 
+                destuffedFrame.etx, destuffedFrame.crc);
+        fclose(outFile);
+        printf("\n[Final format stored in output.txt]\n");
+    } else {
+        printf("\nError: Cannot open output.txt\n");
+    }
 
     return 0;
 }
