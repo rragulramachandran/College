@@ -1,0 +1,15 @@
+# Compiled executables
+*.exe
+*.out
+a.out
+
+# Generated C files from Lex/YACC
+lex.yy.c
+*.tab.c
+*.tab.h
+y.tab.c
+y.tab.h
+
+# Object files
+*.o
+*.obj
