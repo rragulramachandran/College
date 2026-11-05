@@ -14,10 +14,10 @@
 /* Semaphore indexes */
 #define MUTEX 0
 #define EMPTY 1
-#define FULL  2
+#define FULL 2
 
 /* Shared memory structure */
-struct SharedData 
+struct SharedData
 {
     char buffer[SIZE];
     int in;
@@ -25,7 +25,7 @@ struct SharedData
 };
 
 /* Required for semctl() */
-union semun 
+union semun
 {
     int val;
     struct semid_ds *buf;

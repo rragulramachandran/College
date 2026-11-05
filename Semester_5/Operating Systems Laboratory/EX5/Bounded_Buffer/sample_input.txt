@@ -1,0 +1,12 @@
+==================================================
+Operating Systems Laboratory - Bounded Buffer Test
+Experiment 5: Process Synchronization
+Producer: File Read / File Write
+Consumer: File Read / File Write
+==================================================
+Data Block 1: Mutual exclusion guaranteed by SEM_MUTEX (1).
+Data Block 2: Counting semaphore SEM_EMPTY tracks buffer capacity (5).
+Data Block 3: Counting semaphore SEM_FULL tracks available filled slots.
+Data Block 4: Zero race conditions between producer and consumer.
+Data Block 5: Successful end of file transmission test.
+

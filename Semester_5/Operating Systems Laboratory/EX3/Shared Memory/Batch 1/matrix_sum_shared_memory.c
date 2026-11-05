@@ -23,7 +23,8 @@ int main()
     struct MatrixData *data;
     pid_t child;
 
-    shmid = shmget(IPC_PRIVATE, sizeof(struct MatrixData), IPC_CREAT | 0666);
+    key_t key = ftok("matrix_sum_shared_memroy.c", 65);
+    shmid = shmget(key, sizeof(struct MatrixData), IPC_CREAT | 0666);
 
     if (shmid == -1)
     {
